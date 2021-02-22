@@ -85,7 +85,7 @@ def parse(options):
     # File I/O
     parser.add_argument('--redux-dir', type=str, help="Product directory, point to $DESI_SPECTRO_REDUX by default ")
     parser.add_argument('--output-dir', type=str, help="output portal directory for the html pages, which defaults to your home directory ")
-    parser.add_argument('--output-name', type=str, default='dashboard.html', help="name of the html page (to be placed in --output-dir).")
+    parser.add_argument('--output-name', type=str, default='dashboard', help="name of the html page (to be placed in --output-dir).")
     parser.add_argument('--specprod',type=str, help="overwrite the environment keyword for $SPECPROD")
     parser.add_argument("-e", "--skip-expid-file", type=str, required=False,
                         help="Relative pathname for file containing expid's to skip. "+\
@@ -222,6 +222,23 @@ def main(args):
         strTable += "\t<div style='color:{}'>{}</div>".format(background,ctype)
         
     strTable += '\n\n'
+    strTable +="""Filter By OBSTYPE:
+    <select id="obstypelist" onchange="filterByObstype()" class='form-control'>
+    <option>ALL</option>
+    <option>SCIENCE</option>
+    <option>FLAT</option>
+    <option>ARC</option>
+    <option>DARK</option>
+    </select>
+    Exptime Limit:
+    <select id="exptimelist" onchange="filterByExptime()" class='form-control'>
+    <option>ALL</option>
+    <option>5</option>
+    <option>30</option>
+    <option>1200</option>
+    </select>
+    """
+
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month,nights_in_month))
         webpage = os.path.join(os.getenv('DESI_DASHBOARD'), 'links', month)
@@ -240,17 +257,13 @@ def main(args):
     #strTable += js_import_str(os.getenv('DESI_DASHBOARD'))
     strTable += js_str()
     strTable += _closing_str()
-    with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name),'w') as hs:
+    with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name+'.html'),'w') as hs:
         hs.write(strTable)
-
     ##########################
     #### Fix Permission ######
     ##########################
     cmd="fix_permissions.sh -a {}".format(os.getenv('DESI_DASHBOARD'))
     os.system(cmd)
-
-
-
 
 
 def monthly_table(tables,month):
@@ -322,7 +335,8 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
                                                                                                          nbad=nbad)        
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
-    nightly_table_str += "<table id='c'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
+    # Add table
+    nightly_table_str += "<table id='c' class='nightTable'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
     nightly_table_str += "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>"
     nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th></tr>"
 
@@ -726,6 +740,28 @@ def _initialize_page(color_profile):
          text-decoration: none;
          cursor: pointer;
      }
+
+#obstypelist {
+
+  background-position: 10px 10px;
+  background-repeat: no-repeat;
+  width: 10%;
+  font-size: 16px;
+  padding: 12px 20px 12px 40px;
+  border: 1px solid #ddd;
+  margin-bottom: 12px;
+}
+#exptimelist {
+
+  background-position: 10px 10px;
+  background-repeat: no-repeat;
+  width: 10%;
+  font-size: 16px;
+  padding: 12px 20px 12px 40px;
+  border: 1px solid #ddd;
+  margin-bottom: 12px;
+}
+
     """
     for ctype,cdict in color_profile.items():
         font = cdict['font']
@@ -784,7 +820,7 @@ def _str_frac(numerator,denominator):
 def _js_path(output_dir):
     return os.path.join(output_dir,'js','open_nightly_table.js')
 
-def js_import_str(output_dir):
+def js_import_str(output_dir):  # Not used
     output_path = _js_path(output_dir)
     if not os.path.exists(os.path.join(output_dir,'js')):
         os.makedirs(os.path.join(output_dir,'js'))
@@ -825,7 +861,7 @@ def _write_js_script(output_path):
     with open(output_path,'w') as outjs:
         outjs.write(s)
 
-def js_str():
+def js_str(): # Used
     """                                                                                                                  
         Return the javascript script to be added to the html file                                                                 
         """
@@ -855,6 +891,49 @@ def js_str():
                  for (i = 0; i < coll.length; i++) {
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
+           function filterByObstype() {
+                var input, filter, table, tr, td, i;
+                input = document.getElementById("obstypelist");
+                filter = input.value.toUpperCase();
+                tables = document.getElementsByClassName("nightTable")
+                for (j = 0; j < tables.length; j++){
+                 table = tables[j]
+                 tr = table.getElementsByTagName("tr");
+                 for (i = 0; i < tr.length; i++) {
+                   td = tr[i].getElementsByTagName("td")[2];
+                   if (td) {
+                       if (td.innerHTML.toUpperCase().indexOf(filter) > -1 || filter==='ALL') {
+                           tr[i].style.display = "";
+                       } else {
+                          tr[i].style.display = "none";
+                              }
+                       }       
+                                                                            }
+                             }}
+
+            function filterByExptime() {
+                var input, filter, table, tr, td, i;
+                input = document.getElementById("exptimelist");
+                filter = input.value.toUpperCase();
+                tables = document.getElementsByClassName("nightTable")
+                for (j = 0; j < tables.length; j++){
+                 table = tables[j]
+                 tr = table.getElementsByTagName("tr");
+                 for (i = 0; i < tr.length; i++) {
+                   td = tr[i].getElementsByTagName("td")[3];
+                   if (td) {
+                       if (filter==='ALL') {
+                           tr[i].style.display = "";
+                       } else if (parseInt(td.innerHTML) <= parseInt(filter)){
+                           tr[i].style.display = ""; }
+                       else {
+                          tr[i].style.display = "none";
+                              }
+                       }
+                                                                            }
+                             }}
+
+
        </script>                                                                                                 
         """
     return s
