@@ -222,22 +222,32 @@ def main(args):
         strTable += "\t<div style='color:{}'>{}</div>".format(background,ctype)
         
     strTable += '\n\n'
-    strTable +="""Filter By OBSTYPE:
-    <select id="obstypelist" onchange="filterByObstype()" class='form-control'>
+    strTable +="""Filter By Status:
+    <select id="statuslist" onchange="filterByStatus()" class='form-control'>
     <option>ALL</option>
-    <option>SCIENCE</option>
-    <option>FLAT</option>
-    <option>ARC</option>
-    <option>DARK</option>
-    </select>
-    Exptime Limit:
-    <select id="exptimelist" onchange="filterByExptime()" class='form-control'>
-    <option>ALL</option>
-    <option>5</option>
-    <option>30</option>
-    <option>1200</option>
+    <option>processing</option>
+    <option>unprocessed</option>
     </select>
     """
+    # The following codes are for filtering rows by obstype and exptime. Not in use for now, but basically can be enabled anytime. 
+    #strTable +="""Filter By OBSTYPE:
+    #<select id="obstypelist" onchange="filterByObstype()" class='form-control'>
+    #<option>ALL</option>
+    #<option>SCIENCE</option>
+    #<option>FLAT</option>
+    #<option>ARC</option>
+    #<option>DARK</option>
+    #</select>
+    #Exptime Limit:
+    #<select id="exptimelist" onchange="filterByExptime()" class='form-control'>
+    #<option>ALL</option>
+    #<option>5</option>
+    #<option>30</option>
+    #<option>120</option>
+    #<option>900</option>
+    #<option>1200</option>
+    #</select>
+    #"""
 
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month,nights_in_month))
@@ -338,7 +348,7 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
     # Add table
     nightly_table_str += "<table id='c' class='nightTable'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
     nightly_table_str += "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>"
-    nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th></tr>"
+    nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th><th>status</th></tr>"
 
     nightly_table_str += main_body
     nightly_table_str += "</tbody></table></div>\n"
@@ -373,17 +383,22 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     totals_by_type['ZERO'] =   {'psf': 0,               'ff': 0,               'frame': 0,               'sframe': 0}
     totals_by_type['SCIENCE'], totals_by_type['NONE'] = totals_by_type['SKY'], totals_by_type['SKY']
 
-    #table_dir =  os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'),'processing_tables')
-    #file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
+    table_dir =  os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'),'processing_tables')
+    file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
     #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
     file_exptable=get_exposure_table_pathname(night)
     try: # Try reading tables first. Switch to counting files if not failed. 
         d_exp =  ascii.read(file_exptable, data_start=2, delimiter=',')
-        #d_processing = load_table(file_processing) # commented out temporarily, might used later
+        d_processing = load_table(file_processing) # commented out temporarily, might used later
         #d_unprocessed = load_table(file_unprocessed)
     except:
         return calculate_one_night(night, use_short_sci=use_short_sci)
+    expid_processing=[]
+    import pdb;pdb.set_trace()
 
+    for expid_list in d_processing['EXPID']:
+        expid_processing += expid_list.tolist()
+    expid_processing = set(expid_processing)
     expids = list(d_exp['EXPID'])
     expids.sort(reverse=True)
 
@@ -474,6 +489,10 @@ def calculate_one_night_use_file(night, use_short_sci=False):
 
         hlink1 = '----'
         hlink2 = '----'
+        if expid in expid_processing:
+            status = 'processing'
+        else:
+            status = 'unprocessed'
 
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
             lognames = glob.glob(logfileglob.format(obstype.lower(), night,zfild_expid,'log'))
@@ -519,7 +538,7 @@ def calculate_one_night_use_file(night, use_short_sci=False):
                               _str_frac( nsky,       n_spgrph * n_tots['sframe']), \
                               _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
                               hlink1, \
-                              hlink2         ]
+                              hlink2, status     ]
     return output
 
 
@@ -891,6 +910,27 @@ def js_str(): # Used
                  for (i = 0; i < coll.length; i++) {
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
+           function filterByStatus() {
+                var input, filter, table, tr, td, i;
+                input = document.getElementById("statuslist");
+                filter = input.value.toUpperCase();
+                tables = document.getElementsByClassName("nightTable")
+                for (j = 0; j < tables.length; j++){
+                 table = tables[j]
+                 tr = table.getElementsByTagName("tr");
+                 for (i = 0; i < tr.length; i++) {
+                   td = tr[i].getElementsByTagName("td")[14];
+                   console.log(td)
+                   if (td) {
+                       if (td.innerHTML.toUpperCase().indexOf(filter) > -1 || filter==='ALL') {
+                           tr[i].style.display = "";
+                       } else {
+                          tr[i].style.display = "none";
+                              }
+                       }       
+                                                                            }
+                             }}
+
            function filterByObstype() {
                 var input, filter, table, tr, td, i;
                 input = document.getElementById("obstypelist");
